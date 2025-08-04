@@ -77,9 +77,9 @@ def main():
 
     # 🚩 Logo + Title
     logo_path = "triac_logo.png"
-    col1, col2 = st.columns([1, 6])
+    col1, col2 = st.columns([1.2, 5.8])
     with col1:
-        st.image(Image.open(logo_path), width=80)
+        st.image(Image.open(logo_path), width=120)
     with col2:
         st.markdown("<h1 style='margin-bottom:0;'>🛠️ Machining Time Report</h1>", unsafe_allow_html=True)
         st.markdown("<p style='font-size:16px; color:gray;'>By Machine Type and Project</p>", unsafe_allow_html=True)
