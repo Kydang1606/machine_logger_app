@@ -97,7 +97,7 @@ def main():
 
                 log_to_excel(row)
                 st.success("✅ Entry logged successfully!")
-                st.experimental_rerun()
+                st.success("✅ Ghi log thành công! Vui lòng tải lại trang nếu cần xem cập nhật mới.")
 
             except Exception as e:
                 st.error(f"❌ Error: {e}")
