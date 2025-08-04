@@ -5,120 +5,93 @@ import os
 from datetime import datetime
 from openpyxl import load_workbook, Workbook
 
-# ================================================
-# 🛠️ CẤU HÌNH BAN ĐẦU
-# ================================================
-st.set_page_config(page_title="Machine Log App", layout="centered")
-DATA_PATH = "data/Logs.xlsx"
+FILE_PATH = "machine_log.xlsx"
 SHEET_NAME = "Logs"
 
-# ================================================
-# 🧠 HÀM TẠO FILE EXCEL VÀ SHEET "Logs" NẾU CHƯA TỒN TẠI
-# ================================================
-def ensure_log_file():
-    if not os.path.exists("data"):
-        os.makedirs("data")
+st.set_page_config(page_title="Machine Logger", layout="wide")
 
-    if not os.path.exists(DATA_PATH):
-        wb = Workbook()
-        ws = wb.active
-        ws.title = SHEET_NAME
-        ws.append(["Date", "Project", "Machine", "Hours", "Employee", "Note"])
-        wb.save(DATA_PATH)
+st.title("🛠️ Machine Work Logger")
+
+# --- Load existing logs ---
+@st.cache_data
+def load_logs():
+    if os.path.exists(FILE_PATH):
+        try:
+            df = pd.read_excel(FILE_PATH, sheet_name=SHEET_NAME, parse_dates=["Date"])
+            return df
+        except Exception as e:
+            st.warning(f"Could not load existing log: {e}")
+            return pd.DataFrame()
     else:
-        wb = load_workbook(DATA_PATH)
-        if SHEET_NAME not in wb.sheetnames:
-            ws = wb.create_sheet(SHEET_NAME)
-            ws.append(["Date", "Project", "Machine", "Hours", "Employee", "Note"])
-            wb.save(DATA_PATH)
+        return pd.DataFrame()
 
-# ================================================
-# ✅ GHI DỮ LIỆU VÀO FILE EXCEL
-# ================================================
-def log_to_excel(date, project, machine, hours, employee, note):
-    df_new = pd.DataFrame([{
-        "Date": date,
-        "Project": project,
-        "Machine": machine,
-        "Hours": hours,
-        "Employee": employee,
-        "Note": note
-    }])
+df_logs = load_logs()
 
-    # Ghi vào sheet Logs
-    with pd.ExcelWriter(DATA_PATH, engine="openpyxl", mode="a", if_sheet_exists="overlay") as writer:
-        reader = pd.read_excel(DATA_PATH, sheet_name=SHEET_NAME)
-        df_all = pd.concat([reader, df_new], ignore_index=True)
-        df_all.to_excel(writer, sheet_name=SHEET_NAME, index=False)
+# --- Input form ---
+st.subheader("➕ Nhập thông tin công việc")
 
-# ================================================
-# 🚀 ỨNG DỤNG CHÍNH
-# ================================================
-def main():
-    st.title("📝 Machine Log Entry")
-    ensure_log_file()
+with st.form("log_form", clear_on_submit=True):
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        date = st.date_input("📅 Ngày", value=datetime.today())
+        start_time = st.time_input("🕑 Thời gian bắt đầu", value=datetime.strptime("08:00", "%H:%M").time())
+    with col2:
+        end_time = st.time_input("🕕 Thời gian kết thúc", value=datetime.strptime("12:00", "%H:%M").time())
+        machine = st.text_input("🏭 Máy", placeholder="Tên máy")
+    with col3:
+        project_code = st.text_input("📁 Mã dự án", placeholder="VD: D001")
+        material = st.text_input("🧱 Loại vật liệu", placeholder="VD: CFRP, GRP,...")
+    
+    description = st.text_area("📋 Mô tả công việc", height=100)
 
-    with st.form("log_form", clear_on_submit=True):
-        date = st.date_input("📅 Date", value=datetime.today())
-        project = st.text_input("📁 Project")
-        machine = st.text_input("🛠️ Machine")
-        hours = st.number_input("⏱️ Hours", min_value=0.0, step=0.5)
-        employee = st.text_input("👤 Employee")
-        note = st.text_area("📝 Note (optional)")
+    submitted = st.form_submit_button("📤 Ghi vào log")
 
-        submitted = st.form_submit_button("✅ Submit Entry")
-        if submitted:
-            log_to_excel(date, project, machine, hours, employee, note)
-            st.success("✅ Entry logged successfully!")
+    if submitted:
+        try:
+            # Tính tổng thời gian
+            start_dt = datetime.combine(date, start_time)
+            end_dt = datetime.combine(date, end_time)
+            if end_dt < start_dt:
+                end_dt += timedelta(days=1)
+            total_minutes = (end_dt - start_dt).seconds // 60
+            total_hours = round(total_minutes / 60, 2)
 
-    st.markdown("---")
+            # Tạo record mới
+            new_row = pd.DataFrame([{
+                "Date": date,
+                "Start": start_time.strftime("%H:%M"),
+                "End": end_time.strftime("%H:%M"),
+                "Total (min)": total_minutes,
+                "Total (hr)": total_hours,
+                "Machine": machine,
+                "Project Code": project_code,
+                "Material": material,
+                "Description": description
+            }])
 
-    # ========================================
-    # 📊 HIỂN THỊ VÀ LỌC DỮ LIỆU
-    # ========================================
-    st.header("📋 Logs Viewer")
+            # Ghi vào file Excel
+            if os.path.exists(FILE_PATH):
+                existing = pd.read_excel(FILE_PATH, sheet_name=SHEET_NAME)
+                updated_df = pd.concat([existing, new_row], ignore_index=True)
+            else:
+                updated_df = new_row
 
-    try:
-        df_logs = pd.read_excel(DATA_PATH, sheet_name=SHEET_NAME)
-        if df_logs.empty:
-            st.info("Chưa có dữ liệu nào.")
-            return
+            with pd.ExcelWriter(FILE_PATH, engine="openpyxl", mode="w") as writer:
+                updated_df.to_excel(writer, index=False, sheet_name=SHEET_NAME)
 
-        # Lọc theo Project hoặc Machine
-        filter_col = st.selectbox("🔍 Filter by", ["Project", "Machine"])
-        options = df_logs[filter_col].dropna().unique()
-        selected = st.multiselect(f"Select {filter_col}(s)", options, default=options)
+            st.success("✅ Ghi log thành công!")
+            st.experimental_rerun()
 
-        filtered_df = df_logs[df_logs[filter_col].isin(selected)]
-        st.dataframe(filtered_df, use_container_width=True)
+        except Exception as e:
+            st.error(f"❌ Lỗi khi ghi log: {e}")
 
-        # ========================================
-        # 📈 VẼ BIỂU ĐỒ
-        # ========================================
-        st.subheader("📊 Total Hours Chart")
-        chart_data = (
-            filtered_df.groupby(filter_col)["Hours"]
-            .sum()
-            .reset_index()
-            .sort_values("Hours", ascending=False)
-        )
+# --- Hiển thị log ---
+st.divider()
+st.subheader("📊 Tổng hợp thời gian theo máy")
 
-        fig = px.bar(
-            chart_data,
-            x=filter_col,
-            y="Hours",
-            title=f"Total Hours by {filter_col}",
-            text_auto=".2s",
-            color=filter_col,
-            height=400
-        )
-        st.plotly_chart(fig, use_container_width=True)
-
-    except Exception as e:
-        st.error(f"⚠️ Error reading logs: {e}")
-
-# ================================================
-# 🔁 CHẠY APP
-# ================================================
-if __name__ == "__main__":
-    main()
+if not df_logs.empty:
+    df_logs["Total (hr)"] = pd.to_numeric(df_logs["Total (hr)"], errors="coerce")
+    summary = df_logs.groupby("Machine")["Total (hr)"].sum().reset_index().sort_values("Total (hr)", ascending=False)
+    st.dataframe(summary, use_container_width=True)
+else:
+    st.info("Chưa có dữ liệu log nào.")
