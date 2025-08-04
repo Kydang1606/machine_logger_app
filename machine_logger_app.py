@@ -75,48 +75,50 @@ def plot_sunburst(df, selected_machines):
 def main():
     st.set_page_config(page_title="Machining Time Report", layout="wide")
 
-    # 🚩 Logo + Tiêu đề
-    logo_path = "triac_logo.png"  # Đảm bảo file nằm đúng thư mục
-    logo = Image.open(logo_path)
-
-    col1, col2 = st.columns([1, 6])  # Điều chỉnh tỷ lệ cột
+    # 🚩 Logo + Title
+    logo_path = "triac_logo.png"
+    col1, col2 = st.columns([1, 6])
     with col1:
-        st.image(logo, width=80)  # Giảm kích thước logo cho cân đối
+        st.image(Image.open(logo_path), width=80)
     with col2:
         st.markdown("<h1 style='margin-bottom:0;'>🛠️ Machining Time Report</h1>", unsafe_allow_html=True)
         st.markdown("<p style='font-size:16px; color:gray;'>By Machine Type and Project</p>", unsafe_allow_html=True)
 
-    # 📤 Tải file
     uploaded_file = st.file_uploader("📤 Upload Excel File", type=["xlsx"])
     if not uploaded_file:
         return
 
+    # ✅ Load sheets
+    sheet_data = load_all_sheets(uploaded_file)
+    if not sheet_data:
+        return
+
     st.markdown("## 🔧 Filter Settings")
 
-    # 👉 Merge all sheets
+    # ✅ Combine all sheets
     full_df = pd.concat(sheet_data.values(), ignore_index=True)
 
-    # Convert total minutes to hours
+    # ✅ Convert minutes to hours
     col_min = "Tổng thời gian gia công/Total machining time (min)"
     if col_min in full_df.columns:
         full_df[col_min] = pd.to_numeric(full_df[col_min], errors="coerce")
         full_df["Total Time (hr)"] = full_df[col_min] / 60
 
-    # Identify project column
+    # ✅ Project column check
     col_project = "Mã dự án/Project"
     if col_project not in full_df.columns:
         st.error("❌ Column 'Mã dự án/Project' not found.")
         st.write("Available columns:", full_df.columns.tolist())
         return
 
-    # Select project
+    # ✅ Project selector
     projects = full_df[col_project].dropna().unique().tolist()
     selected_project = st.selectbox("📁 Select Project", projects)
 
-    # Filter by selected project
+    # ✅ Filter by project
     df_filtered = full_df[full_df[col_project] == selected_project]
 
-    # Select machines
+    # ✅ Machine selector
     machine_col = "Machine/máy"
     available_machines = df_filtered[machine_col].dropna().unique().tolist()
     selected_machines = st.multiselect("🛠️ Select Machine(s)", available_machines, default=available_machines)
@@ -127,11 +129,11 @@ def main():
 
     df_selected = df_filtered[df_filtered[machine_col].isin(selected_machines)]
 
-    # Show data
+    # ✅ Show data
     st.markdown("### 📋 Filtered Data")
     st.dataframe(df_selected, use_container_width=True)
 
-    # Charts
+    # ✅ Charts
     st.markdown("## 📊 Visualization")
     plot_bar(df_selected, selected_project, selected_machines)
     st.markdown("---")
