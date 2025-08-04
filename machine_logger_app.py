@@ -9,7 +9,7 @@ from openpyxl import load_workbook, Workbook
 # 🛠️ CẤU HÌNH BAN ĐẦU
 # ================================================
 st.set_page_config(page_title="Machine Log App", layout="centered")
-DATA_PATH = "data/Logs.xlsx"
+DATA_PATH = "data/machine_log.xlsm"  # ✅ Sửa tên file thành machine_log.xlsm
 SHEET_NAME = "Logs"
 
 # ================================================
