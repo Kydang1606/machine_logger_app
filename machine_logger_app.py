@@ -73,7 +73,6 @@ def plot_sunburst(df, selected_machines):
 # 🚀 MAIN APP
 # ================================================
 def main():
-    st.title("Machining Time Report")
         # 🚩 Logo và tiêu đề
     logo_path = "triac_logo.png"  # Đặt file logo cùng thư mục với app
     col1, col2 = st.columns([1, 8])
