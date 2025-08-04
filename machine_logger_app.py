@@ -1,8 +1,8 @@
-import streamlit as st
+import streamlit as st 
 import pandas as pd
 import plotly.express as px
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from openpyxl import load_workbook, Workbook
 
 FILE_PATH = "machine_log.xlsx"
@@ -42,6 +42,7 @@ with st.form("log_form", clear_on_submit=True):
         project_code = st.text_input("📁 Mã dự án", placeholder="VD: D001")
         material = st.text_input("🧱 Loại vật liệu", placeholder="VD: CFRP, GRP,...")
     
+    executor = st.text_input("👷 Người thực hiện", placeholder="Họ và tên")
     description = st.text_area("📋 Mô tả công việc", height=100)
 
     submitted = st.form_submit_button("📤 Ghi vào log")
@@ -59,6 +60,7 @@ with st.form("log_form", clear_on_submit=True):
             # Tạo record mới
             new_row = pd.DataFrame([{
                 "Date": date,
+                "Executor": executor,
                 "Start": start_time.strftime("%H:%M"),
                 "End": end_time.strftime("%H:%M"),
                 "Total (min)": total_minutes,
