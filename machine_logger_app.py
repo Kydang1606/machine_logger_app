@@ -77,7 +77,7 @@ def main():
 
     # 🚩 Logo + Title
     logo_path = "triac_logo.png"
-    col1, col2 = st.columns([1.2, 5.8])
+    col1, col2 = st.columns([1.5, 5.8])
     with col1:
         st.image(Image.open(logo_path), width=120)
     with col2:
