@@ -73,21 +73,22 @@ def plot_sunburst(df, selected_machines):
 # 🚀 MAIN APP
 # ================================================
 def main():
-        # 🚩 Logo và tiêu đề
-    logo_path = "triac_logo.png"  # Đặt file logo cùng thư mục với app
-    col1, col2 = st.columns([1, 8])
-    with col1:
-        st.image(Image.open(logo_path), width=100)
-    with col2:
-        st.title("🛠️ Machining Time Report")
-        st.caption("By Machine Type and Project")
+    st.set_page_config(page_title="Machining Time Report", layout="wide")
 
+    # 🚩 Logo + Tiêu đề
+    logo_path = "triac_logo.png"  # Đảm bảo file nằm đúng thư mục
+    logo = Image.open(logo_path)
+
+    col1, col2 = st.columns([1, 6])  # Điều chỉnh tỷ lệ cột
+    with col1:
+        st.image(logo, width=80)  # Giảm kích thước logo cho cân đối
+    with col2:
+        st.markdown("<h1 style='margin-bottom:0;'>🛠️ Machining Time Report</h1>", unsafe_allow_html=True)
+        st.markdown("<p style='font-size:16px; color:gray;'>By Machine Type and Project</p>", unsafe_allow_html=True)
+
+    # 📤 Tải file
     uploaded_file = st.file_uploader("📤 Upload Excel File", type=["xlsx"])
     if not uploaded_file:
-        return
-
-    sheet_data = load_all_sheets(uploaded_file)
-    if not sheet_data:
         return
 
     st.markdown("## 🔧 Filter Settings")
