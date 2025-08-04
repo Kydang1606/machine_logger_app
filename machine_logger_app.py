@@ -1,154 +1,136 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import os
-from datetime import datetime, timedelta
-from openpyxl import load_workbook, Workbook
 
 # ================================================
-# 🛠️ CẤU HÌNH BAN ĐẦU
+# ✅ LOAD ALL SHEETS FROM EXCEL
 # ================================================
-st.set_page_config(page_title="Machine Log App", layout="centered")
-DATA_PATH = "data/machine_log.xlsm"  # ✅ Sửa tên file thành machine_log.xlsm
-SHEET_NAME = "Logs"
+def load_all_sheets(file):
+    try:
+        xls = pd.ExcelFile(file)
+        sheet_data = {}
+        for sheet_name in xls.sheet_names:
+            df = pd.read_excel(xls, sheet_name=sheet_name, header=0)
+            df.columns = df.columns.str.strip()
+            df = df.loc[:, ~df.columns.str.contains("^Unnamed", na=False)]
+            df["Machine Type"] = sheet_name  # Add sheet name as column
+            sheet_data[sheet_name] = df
+        return sheet_data
+    except Exception as e:
+        st.error(f"❌ Failed to read Excel file: {e}")
+        return {}
 
 # ================================================
-# 🧠 HÀM TẠO FILE EXCEL VÀ SHEET "Logs" NẾU CHƯA TỒN TẠI
+# 📊 BAR CHART OF TOTAL HOURS BY MACHINE
 # ================================================
-def ensure_log_file():
-    if not os.path.exists("data"):
-        os.makedirs("data")
+def plot_bar(df, project_name, selected_machines):
+    col_machine = "Machine/máy"
+    col_hour = "Total Time (hr)"
 
-    if not os.path.exists(DATA_PATH):
-        wb = Workbook()
-        ws = wb.active
-        ws.title = SHEET_NAME
-        ws.append([
-            "Date", "Start", "End", "Total (min)", "Total (hr)",
-            "Machine", "Project", "Material", "Employee", "Description"
-        ])
-        wb.save(DATA_PATH)
-    else:
-        wb = load_workbook(DATA_PATH)
-        if SHEET_NAME not in wb.sheetnames:
-            ws = wb.create_sheet(SHEET_NAME)
-            ws.append([
-                "Date", "Start", "End", "Total (min)", "Total (hr)",
-                "Machine", "Project", "Material", "Employee", "Description"
-            ])
-            wb.save(DATA_PATH)
+    df_group = (
+        df[df[col_machine].isin(selected_machines)]
+        .groupby(col_machine)[col_hour]
+        .sum()
+        .reset_index()
+    )
 
-# ================================================
-# ✅ GHI DỮ LIỆU VÀO FILE EXCEL
-# ================================================
-def log_to_excel(row_dict):
-    df_new = pd.DataFrame([row_dict])
-
-    with pd.ExcelWriter(DATA_PATH, engine="openpyxl", mode="a", if_sheet_exists="overlay") as writer:
-        reader = pd.read_excel(DATA_PATH, sheet_name=SHEET_NAME)
-        df_all = pd.concat([reader, df_new], ignore_index=True)
-        df_all.to_excel(writer, sheet_name=SHEET_NAME, index=False)
+    fig = px.bar(
+        df_group,
+        x=col_machine,
+        y=col_hour,
+        text_auto=".2f",
+        color=col_machine,
+        title=f"📊 Total Processing Time by Machine - Project {project_name}",
+        labels={col_hour: "Hours"}
+    )
+    st.plotly_chart(fig, use_container_width=True)
 
 # ================================================
-# 🚀 ỨNG DỤNG CHÍNH
+# 🌀 SUNBURST CHART FOR MACHINE & TASK
+# ================================================
+def plot_sunburst(df, selected_machines):
+    col_machine = "Machine/máy"
+    col_desc = "Mô tả/Description"
+    col_hour = "Total Time (hr)"
+
+    if any(col not in df.columns for col in [col_machine, col_desc, col_hour]):
+        st.warning("⚠️ Required columns missing for sunburst chart.")
+        return
+
+    df_sun = df[df[col_machine].isin(selected_machines)]
+
+    fig = px.sunburst(
+        df_sun,
+        path=[col_machine, col_desc],
+        values=col_hour,
+        title="🌀 Time Allocation by Machine and Task",
+        labels={col_hour: "Hours"}
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+# ================================================
+# 🚀 MAIN APP
 # ================================================
 def main():
-    st.title("📝 Machine Work Logger")
-    ensure_log_file()
+    st.set_page_config(page_title="⏱️ Machine Time Report Viewer", layout="wide")
+    st.title("📄 Machining Time Report by Machine Type and Project")
 
-    with st.form("log_form", clear_on_submit=True):
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            date = st.date_input("📅 Date", value=datetime.today())
-            start_time = st.time_input("🕑 Start Time", value=datetime.strptime("08:00", "%H:%M").time())
-        with col2:
-            end_time = st.time_input("🕕 End Time", value=datetime.strptime("12:00", "%H:%M").time())
-            machine = st.text_input("🏭 Machine", placeholder="e.g., CNC01")
-        with col3:
-            project = st.text_input("📁 Project Code", placeholder="e.g., D001")
-            material = st.text_input("🧱 Material Type", placeholder="e.g., CFRP, GRP,...")
+    uploaded_file = st.file_uploader("📤 Upload Excel File", type=["xlsx"])
+    if not uploaded_file:
+        return
 
-        employee = st.text_input("👤 Employee")
-        description = st.text_area("📋 Work Description", height=100)
+    sheet_data = load_all_sheets(uploaded_file)
+    if not sheet_data:
+        return
 
-        submitted = st.form_submit_button("✅ Submit Entry")
-        if submitted:
-            try:
-                start_dt = datetime.combine(date, start_time)
-                end_dt = datetime.combine(date, end_time)
-                if end_dt < start_dt:
-                    end_dt += timedelta(days=1)
+    st.markdown("## 🔧 Filter Settings")
 
-                total_minutes = int((end_dt - start_dt).total_seconds() // 60)
-                total_hours = round(total_minutes / 60, 2)
+    # 👉 Merge all sheets
+    full_df = pd.concat(sheet_data.values(), ignore_index=True)
 
-                row = {
-                    "Date": date,
-                    "Start": start_time.strftime("%H:%M"),
-                    "End": end_time.strftime("%H:%M"),
-                    "Total (min)": total_minutes,
-                    "Total (hr)": total_hours,
-                    "Machine": machine,
-                    "Project": project,
-                    "Material": material,
-                    "Employee": employee,
-                    "Description": description
-                }
+    # Convert total minutes to hours
+    col_min = "Tổng thời gian gia công/Total machining time (min)"
+    if col_min in full_df.columns:
+        full_df[col_min] = pd.to_numeric(full_df[col_min], errors="coerce")
+        full_df["Total Time (hr)"] = full_df[col_min] / 60
 
-                log_to_excel(row)
-                st.success("✅ Entry logged successfully!")
-                st.success("✅ Ghi log thành công! Vui lòng tải lại trang nếu cần xem cập nhật mới.")
+    # Identify project column
+    col_project = "Mã dự án/Project"
+    if col_project not in full_df.columns:
+        st.error("❌ Column 'Mã dự án/Project' not found.")
+        st.write("Available columns:", full_df.columns.tolist())
+        return
 
-            except Exception as e:
-                st.error(f"❌ Error: {e}")
+    # Select project
+    projects = full_df[col_project].dropna().unique().tolist()
+    selected_project = st.selectbox("📁 Select Project", projects)
 
+    # Filter by selected project
+    df_filtered = full_df[full_df[col_project] == selected_project]
+
+    # Select machines
+    machine_col = "Machine/máy"
+    available_machines = df_filtered[machine_col].dropna().unique().tolist()
+    selected_machines = st.multiselect("🛠️ Select Machine(s)", available_machines, default=available_machines)
+
+    if not selected_machines:
+        st.warning("⚠️ Please select at least one machine.")
+        return
+
+    df_selected = df_filtered[df_filtered[machine_col].isin(selected_machines)]
+
+    # Show data
+    st.markdown("### 📋 Filtered Data")
+    st.dataframe(df_selected, use_container_width=True)
+
+    # Charts
+    st.markdown("## 📊 Visualization")
+    plot_bar(df_selected, selected_project, selected_machines)
     st.markdown("---")
-
-    # ========================================
-    # 📋 HIỂN THỊ LOGS VÀ BỘ LỌC
-    # ========================================
-    st.header("📊 Logs Viewer")
-
-    try:
-        df_logs = pd.read_excel(DATA_PATH, sheet_name=SHEET_NAME)
-        if df_logs.empty:
-            st.info("Chưa có dữ liệu nào.")
-            return
-
-        filter_col = st.selectbox("🔍 Filter by", ["Project", "Machine"])
-        options = df_logs[filter_col].dropna().unique()
-        selected = st.multiselect(f"Select {filter_col}(s)", options, default=options)
-
-        filtered_df = df_logs[df_logs[filter_col].isin(selected)]
-        st.dataframe(filtered_df, use_container_width=True)
-
-        # ========================================
-        # 📈 BIỂU ĐỒ TỔNG GIỜ
-        # ========================================
-        st.subheader("📊 Total Hours Chart")
-        chart_data = (
-            filtered_df.groupby(filter_col)["Total (hr)"]
-            .sum()
-            .reset_index()
-            .sort_values("Total (hr)", ascending=False)
-        )
-
-        fig = px.bar(
-            chart_data,
-            x=filter_col,
-            y="Total (hr)",
-            title=f"Total Hours by {filter_col}",
-            text_auto=".2s",
-            color=filter_col,
-            height=400
-        )
-        st.plotly_chart(fig, use_container_width=True)
-
-    except Exception as e:
-        st.error(f"⚠️ Error reading logs: {e}")
+    plot_sunburst(df_selected, selected_machines)
 
 # ================================================
-# 🔁 CHẠY APP
+# 🔁 RUN APP
 # ================================================
 if __name__ == "__main__":
     main()
