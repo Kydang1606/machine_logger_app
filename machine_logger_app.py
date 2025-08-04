@@ -73,7 +73,6 @@ def plot_sunburst(df, selected_machines):
 # 🚀 MAIN APP
 # ================================================
 def main():
-    st.set_page_config(page_title="⏱️ Machine Time Report Viewer", layout="wide")
     st.title("Machining Time Report")
         # 🚩 Logo và tiêu đề
     logo_path = "triac_logo.png"  # Đặt file logo cùng thư mục với app
